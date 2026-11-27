@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>現実では絶対にやらない。だから、ここで思いっきり煽る。｜3D あおり運転シミュレーター</title>
+<meta name="description" content="現実では絶対にやらない。だから、ここで思いっきり煽る。3D あおり運転シミュレーター（ゲームの中だけの話です）">
+<meta property="og:type" content="website">
+<meta property="og:title" content="現実では絶対にやらない。だから、ここで思いっきり煽る。">
+<meta property="og:description" content="3D あおり運転シミュレーター（ゲームの中だけ）">
+<meta property="og:image" content="assets/ogp.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="./">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="現実では絶対にやらない。だから、ここで思いっきり煽る。">
+<meta name="twitter:description" content="3D あおり運転シミュレーター（ゲームの中だけ）">
+<meta name="twitter:image" content="assets/ogp.png">
+<!-- 公開後：og:url / og:image / twitter:image を絶対 URL に差し替える -->
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #87a7c4; font-family: system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif; }
+  #warn { position: fixed; top: 0; left: 0; right: 0; z-index: 10; background: #c00; color: #fff; text-align: center; font-weight: 700; padding: 8px 12px; font-size: 15px; letter-spacing: .03em; }
+  #title { position: fixed; top: 44px; left: 0; right: 0; z-index: 5; text-align: center; color: #fff; text-shadow: 0 1px 4px #000; pointer-events: none; padding: 0 8px; }
+  #title h1 { margin: 6px 0 0; font-size: clamp(15px, 3.2vw, 26px); }
+  #title p { margin: 2px 0 0; font-size: clamp(11px, 2vw, 14px); opacity: .9; }
+  #hud { position: fixed; left: 12px; bottom: 12px; max-width: calc(100vw - 260px); z-index: 5; color: #fff; text-shadow: 0 1px 3px #000; font-size: 14px; line-height: 1.6; pointer-events: none; }
+  #speed { font-size: 32px; font-weight: 700; }
+  #view { position: fixed; right: 12px; bottom: 12px; z-index: 5; padding: 10px 16px; font-size: 15px; border: 0; border-radius: 8px; background: #fff; cursor: pointer; }
+  #gap { position: fixed; left: 50%; top: 96px; transform: translateX(-50%); z-index: 5; text-align: center; color: #fff; text-shadow: 0 2px 6px #000; pointer-events: none; line-height: 1; }
+  #gapval { font-size: clamp(40px, 11vw, 76px); font-weight: 800; font-variant-numeric: tabular-nums; }
+  #gapval small { font-size: .4em; margin-left: 4px; }
+  #gaplabel { font-size: 12px; opacity: .85; margin-bottom: 2px; }
+  #gaps { position: fixed; left: 12px; top: 96px; z-index: 5; color: #fff; text-shadow: 0 1px 3px #000; font-size: 13px; width: 130px; }
+  #gaps .bar { margin: 2px 0 6px 0; width: 100%; }
+  #police { font-size: 12px; min-height: 1.3em; }
+  #touch { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; padding: 0 8px 10px; justify-content: space-between; align-items: flex-end; pointer-events: none; user-select: none; -webkit-user-select: none; touch-action: none; }
+  #touch .grp { display: grid; gap: 8px; pointer-events: auto; }
+  #touch .lr { grid-template-columns: repeat(2, 1fr); }
+  #touch .ud { grid-template-columns: repeat(2, 1fr); }
+  #touch .act { grid-template-columns: repeat(3, 1fr); }
+  #touch button { min-width: 56px; height: 56px; border: 0; border-radius: 12px; background: rgba(255,255,255,.75); color: #222; font-size: 20px; font-weight: 700; touch-action: none; -webkit-tap-highlight-color: transparent; padding: 0 6px; }
+  #touch button.act-btn { font-size: 13px; }
+  #touch button:active, #touch button.down { background: #ffd070; }
+  @media (pointer: coarse), (max-width: 820px) {
+    #touch { display: flex; flex-wrap: wrap; gap: 8px; }
+    body:not(.playing) #touch { display: none; }
+    #hud > div:last-child, #view { display: none; }
+    #hud { left: 50%; transform: translateX(-50%); bottom: auto; top: 188px; text-align: center; }
+    #speed { font-size: 22px; }
+    #title p { display: none; }
+    #warn { font-size: 12px; line-height: 1.3; padding: 5px 8px; } /* 狭い幅では 2 行（約 41px）になる */
+    #title { top: 46px; }
+    #title h1 { margin-top: 2px; line-height: 1.25; }
+    #gap { top: 96px; } #gaps { top: 96px; width: 96px; font-size: 11px; }
+    #stats { top: 96px; font-size: 12px; }
+    #hud { top: 164px; max-width: none; }
+    #over { font-size: 18px; }
+  }
+  @media (max-width: 820px) and (max-height: 500px) { #title { display: none; } }
+  #flash { position: fixed; inset: 0; z-index: 4; background: #fff; opacity: 0; pointer-events: none; }
+  #stats { position: fixed; right: 12px; top: 96px; width: 150px; z-index: 5; color: #fff; text-shadow: 0 1px 3px #000; font-size: 14px; text-align: right; line-height: 1.6; }
+  .bar { width: 100%; height: 10px; margin: 2px 0 0 auto; background: rgba(0,0,0,.45); border-radius: 5px; overflow: hidden; }
+  #barfill { height: 100%; width: 0; background: #e8a020; }
+  #over { position: fixed; inset: 0; z-index: 8; display: none; align-items: center; justify-content: center; flex-direction: column; background: rgba(0,0,0,.6); color: #fff; font-size: 22px; gap: 8px; }
+  #over .row2 { display: flex; gap: 12px; margin-top: 8px; }
+  #over .row2 > * { padding: 10px 22px; font-size: 16px; border: 0; border-radius: 8px; background: #fff; color: #222; text-decoration: none; cursor: pointer; font-family: inherit; }
+  #over #retry { background: #d94040; color: #fff; font-weight: 700; }
+  #select { position: fixed; left: 0; right: 0; bottom: 0; z-index: 9; padding: 14px 12px 18px; background: rgba(0,0,0,.65); color: #fff; text-align: center; }
+  #select h2 { margin: 0 0 8px; font-size: 18px; }
+  #select .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 6px 0; }
+  #select button { border: 2px solid transparent; border-radius: 8px; padding: 8px 12px; font-size: 14px; cursor: pointer; background: #fff; color: #222; }
+  #select button.on { border-color: #e8a020; background: #ffe9b8; font-weight: 700; }
+  #select .sw { width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 3px solid #fff; }
+  #select .sw.on { border-color: #e8a020; box-shadow: 0 0 0 2px #000; }
+  #startbtn { margin-top: 6px; padding: 12px 36px !important; font-size: 18px !important; background: #d94040 !important; color: #fff !important; font-weight: 700; }
+  body:not(.playing) #hud, body:not(.playing) #view { display: none; }
+  canvas { display: block; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="warn" role="alert">⚠ 現実では絶対にやらないでください。ここはゲームの中だけです</div>
+<div id="title"><h1>現実では絶対にやらない。だから、ここで思いっきり煽る。</h1><p>3D あおり運転シミュレーター</p></div>
+<div id="flash"></div>
+<div id="gap"><div id="gaplabel">車間距離</div><div id="gapval">---<small>m</small></div></div>
+<div id="gaps"><div>圧<div class="bar"><div id="barfill"></div></div></div><div>ビビり<div class="bar"><div id="fearfill" style="height:100%;width:0;background:#d94040"></div></div></div><div>警察<div class="bar"><div id="policefill" style="height:100%;width:0;background:#3a6ee0"></div></div></div><div id="police"></div></div>
+<div id="stats"><div id="score">SCORE 0</div><div id="overtakes">追い越し 0 台</div><div id="combo"></div><div id="crash"></div></div>
+<div id="over"><div id="overmsg"></div><div id="result" style="font-size:18px;line-height:1.7;text-align:center"></div><div class="row2"><a id="share" href="#" target="_blank" rel="noopener noreferrer">X でシェア</a><button id="retry" type="button">リトライ（R）</button></div></div>
+<div id="select"><h2>車を選んでスタート</h2><div class="row" id="models"></div><div class="row" id="colors"></div><div id="specs" style="font-size:13px"></div><button id="startbtn" type="button">スタート（Enter）</button></div>
+<div id="hud"><div id="speed">0 km/h</div><div>←→ 車線変更 ／ ↑↓ 加減速 ／ P パッシング ／ H クラクション ／ V 視点切替</div></div>
+<button id="view" type="button">視点切替（V）：運転席</button>
+<div id="touch">
+  <div class="grp lr"><button type="button" data-act="left" aria-label="左車線へ">←</button><button type="button" data-act="right" aria-label="右車線へ">→</button></div>
+  <div class="grp act"><button type="button" class="act-btn" data-act="horn">H<br>クラクション</button><button type="button" class="act-btn" data-act="pass">P<br>パッシング</button><button type="button" class="act-btn" data-act="view">V<br>視点</button></div>
+  <div class="grp ud"><button type="button" data-hold="ArrowUp" aria-label="加速">↑</button><button type="button" data-hold="ArrowDown" aria-label="減速">↓</button></div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { createState, update, speedMultiplier, shareText } from './logic.js';
+import { advanceNpcs } from './npc.js';
+import { PLAYER_MODELS, COLORS, buildCarMesh } from './cars.js';
+
+const LANE_W = 3.5, LANES = [-LANE_W, 0, LANE_W]; // 左側通行：x が小さいほど左
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87a7c4);
+scene.fog = new THREE.Fog(0x87a7c4, 40, 220);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 300);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x556655, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(20, 40, 10); scene.add(sun);
+
+// 道路：z 方向に長い帯。無限スクロールは「世界を手前に流す」方式
+const SEG = 20, NSEG = 16, LEN = SEG * NSEG;
+const world = new THREE.Group(); scene.add(world);
+const asphalt = new THREE.MeshLambertMaterial({ color: 0x3a3a3e, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+const grass = new THREE.Mesh(new THREE.PlaneGeometry(400, 600), new THREE.MeshLambertMaterial({ color: 0x4f7f4a }));
+grass.rotation.x = -Math.PI / 2; grass.position.y = -0.15; scene.add(grass);
+const road = new THREE.Mesh(new THREE.PlaneGeometry(LANE_W * 3 + 1, 600), asphalt);
+road.rotation.x = -Math.PI / 2; scene.add(road);
+const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+const edgeGeo = new THREE.PlaneGeometry(0.15, 600);
+for (const x of [-LANE_W * 1.5, LANE_W * 1.5]) {
+  const e = new THREE.Mesh(edgeGeo, lineMat); e.rotation.x = -Math.PI / 2; e.position.set(x, 0.03, 0); scene.add(e);
+}
+// 流れる物（破線・ガードレール柱・街灯）
+const dashGeo = new THREE.PlaneGeometry(0.15, 3);
+const poleGeo = new THREE.CylinderGeometry(0.1, 0.1, 6, 6);
+const poleMat = new THREE.MeshLambertMaterial({ color: 0x999999 });
+const scrollers = [];
+function addScroller(obj, z) { obj.position.z = z; world.add(obj); scrollers.push(obj); }
+for (let i = 0; i < NSEG; i++) {
+  const z = -i * SEG + SEG * 2;
+  for (const x of [-LANE_W / 2, LANE_W / 2]) { // -1.75, 1.75
+    const d = new THREE.Mesh(dashGeo, lineMat); d.rotation.x = -Math.PI / 2; d.position.x = x; d.position.y = 0.03;
+    const g = new THREE.Group(); g.add(d); addScroller(g, z);
+  }
+  for (const side of [-1, 1]) {
+    const p = new THREE.Mesh(poleGeo, poleMat); p.position.set(side * (LANE_W * 1.5 + 3), 3, 0);
+    const g = new THREE.Group(); g.add(p); addScroller(g, z);
+  }
+}
+// 遠くの建物（装飾）
+const bMat = new THREE.MeshLambertMaterial({ color: 0x8c93a0 });
+for (let i = 0; i < NSEG; i++) for (const side of [-1, 1]) {
+  const h = 6 + Math.random() * 20;
+  const b = new THREE.Mesh(new THREE.BoxGeometry(8, h, 8), bMat);
+  b.position.set(side * (20 + Math.random() * 15), h / 2, 0);
+  const g = new THREE.Group(); g.add(b); addScroller(g, -i * SEG + SEG * 2);
+}
+
+// 自車：原点に固定、進行方向は -z。車種・色は選択画面で決める
+const car = new THREE.Group(); scene.add(car);
+const beam = new THREE.SpotLight(0xffffee, 0, 80, 0.5, 0.5); // パッシング用
+beam.position.set(0, 0.8, -2); beam.target.position.set(0, 0.5, -40); car.add(beam, beam.target);
+let selModel = PLAYER_MODELS[2], selColor = COLORS[2];
+let carMesh = null, cabin = null, lightMat = null, body = null;
+let maxSpeed = selModel.maxSpeed, accel = selModel.accel;
+function buildPlayer() {
+  if (carMesh) car.remove(carMesh);
+  carMesh = buildCarMesh(THREE, { ...selModel, color: selColor.hex });
+  cabin = carMesh.userData.cabin; lightMat = carMesh.userData.headMat; body = carMesh;
+  car.add(carMesh);
+  maxSpeed = selModel.maxSpeed; accel = selModel.accel;
+  beam.position.set(0, 0.8, -selModel.length / 2);
+  cabin.visible = viewMode === 'top' || !started;
+}
+
+// NPC 描画：logic の状態から車メッシュを作り、位置を同期する
+const npcMeshes = new Map();
+const NPC_Z0 = 4.2; // 自車前端〜自車中心の分（d は車間なので NPC 中心はさらに半車長先）
+const makeNpcMesh = c => buildCarMesh(THREE, c);
+
+// ゲーム状態
+let state = createState({ playerLane: 1 });
+let npcSeq = 0;
+const nextId = () => 'n' + (++npcSeq);
+advanceNpcs(state, 0, nextId);
+const input = { passing: false, horn: false };
+
+// クラクション：WebAudio の発振音（外部音源は使わない）
+let audio = null;
+function honk() {
+  audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+  if (audio.state === 'suspended') audio.resume();
+  const t = audio.currentTime, gain = audio.createGain();
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(0.15, t + 0.03);
+  gain.gain.setValueAtTime(0.15, t + 0.35);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+  gain.connect(audio.destination);
+  for (const f of [420, 520]) {
+    const o = audio.createOscillator(); o.type = 'square'; o.frequency.value = f;
+    o.connect(gain); o.start(t); o.stop(t + 0.46);
+  }
+}
+let flashT = 0;
+const $ = id => document.getElementById(id);
+const flashEl = document.getElementById('flash');
+
+// 視点
+let viewMode = 'fp';
+let started = false;
+const btn = document.getElementById('view');
+function setView(m) {
+  viewMode = m;
+  cabin.visible = m === 'top' || !started;
+  btn.textContent = '視点切替（V）：' + (m === 'fp' ? '運転席' : '俯瞰');
+}
+function toggleView() { setView(viewMode === 'fp' ? 'top' : 'fp'); }
+btn.addEventListener('click', e => { toggleView(); btn.blur(); });
+buildPlayer(); setView('fp');
+
+// 操作
+const keys = {};
+let lane = 1, targetX = 0, speed = 20; // m/s
+const MIN = 5;
+addEventListener('keydown', e => {
+  if (!started) { if (e.code === 'Enter') startGame(); return; }
+  if (e.repeat) { keys[e.code] = true; return; }
+  keys[e.code] = true;
+  if (e.code === 'ArrowLeft') laneMove(-1);
+  if (e.code === 'ArrowRight') laneMove(1);
+  if (e.code === 'KeyV') toggleView();
+  if (e.code === 'KeyP') input.passing = true;
+  if (e.code === 'KeyH') input.horn = true;
+  if (e.code === 'KeyR' && state.gameOver) retry();
+  if (e.code.startsWith('Arrow')) e.preventDefault();
+});
+const laneMove = d => { lane = Math.max(0, Math.min(2, lane + d)); };
+// タッチボタン（ゲーム開始後のみ有効）
+for (const b of document.querySelectorAll('#touch button')) {
+  const act = b.dataset.act, hold = b.dataset.hold;
+  if (hold) {
+    const on = v => e => { e.preventDefault(); if (started) keys[hold] = v; b.classList.toggle('down', v); };
+    b.addEventListener('pointerdown', on(true));
+    for (const t of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(t, on(false));
+  } else {
+    b.addEventListener('pointerdown', e => {
+      e.preventDefault(); if (!started) return;
+      if (act === 'left') laneMove(-1);
+      if (act === 'right') laneMove(1);
+      if (act === 'pass') input.passing = true;
+      if (act === 'horn') input.horn = true;
+      if (act === 'view') toggleView();
+    });
+  }
+  b.addEventListener('contextmenu', e => e.preventDefault());
+}
+addEventListener('keyup', e => { keys[e.code] = false; });
+targetX = LANES[lane];
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+function renderSelect() {
+  $('models').innerHTML = ''; $('colors').innerHTML = '';
+  for (const m of PLAYER_MODELS) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = m.name;
+    if (m === selModel) b.className = 'on';
+    b.onclick = () => { selModel = m; buildPlayer(); renderSelect(); };
+    $('models').appendChild(b);
+  }
+  for (const c of COLORS) {
+    const b = document.createElement('button'); b.type = 'button'; b.title = c.name; b.setAttribute('aria-label', c.name);
+    b.className = 'sw' + (c === selColor ? ' on' : ''); b.style.background = '#' + c.hex.toString(16).padStart(6, '0');
+    b.onclick = () => { selColor = c; buildPlayer(); renderSelect(); };
+    $('colors').appendChild(b);
+  }
+  $('specs').textContent = selModel.name + '／' + selColor.name + '／最高速 ' + Math.round(selModel.maxSpeed * 3.6) + ' km/h';
+}
+function startGame() {
+  started = true; document.body.classList.add('playing'); $('select').style.display = 'none';
+  cabin.visible = viewMode === 'top'; clock.getDelta();
+}
+$('startbtn').onclick = e => { startGame(); e.currentTarget.blur(); };
+const speedEl = document.getElementById('speed');
+function showResult(reason) {
+  $('overmsg').textContent = overMsg[reason];
+  $('result').innerHTML = 'SCORE ' + state.score + '<br>追い越し ' + state.overtakes + ' 台 ／ 最大 ' + state.maxCombo + ' コンボ';
+  $('share').href = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareText(state)) + '&url=' + encodeURIComponent(location.href.split('#')[0]);
+  $('over').style.display = 'flex';
+}
+// リトライ：ページを読み込み直して最初の状態へ（車選択画面に戻る）
+function retry() { location.reload(); }
+$('retry').onclick = retry;
+// パトカー：警察ゲージ満タンで自車の後方に出現し、gap（m）まで詰めてくる
+let policeMesh = null;
+function spawnPolice() {
+  policeMesh = buildCarMesh(THREE, { type: 'police', color: 0xf2f2f2 });
+  policeMesh.position.x = LANES[lane]; scene.add(policeMesh);
+}
+const overMsg = { crashes: 'クラッシュ多発でゲームオーバー', arrested: '逮捕されました（ゲームの中だけの話です）' };
+const clock = new THREE.Clock();
+renderSelect();
+let steerLean = 0;
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (keys.ArrowUp) speed += accel * dt;
+  else if (keys.ArrowDown) speed -= 25 * dt;
+  else speed -= 2 * dt;
+  speed = Math.max(MIN, Math.min(maxSpeed, speed));
+  const eff = speed * speedMultiplier(state); // クラッシュ減速中は低下
+
+  // ロジック更新：自車・NPC を進めてから update（passing/horn は押した瞬間だけ）
+  if (started && !state.gameOver) {
+    state.player.z += eff * dt;
+    advanceNpcs(state, dt, nextId);
+    const evs = update(state, dt, { lane, passing: input.passing, horn: input.horn });
+    for (const e of evs) {
+      if (e.type === 'passing') flashT = 0.35;
+            if (e.type === 'horn') honk();
+      if (e.type === 'policeSpawn') spawnPolice();
+      if (e.type === 'gameOver') showResult(e.reason);
+    }
+  }
+  input.passing = input.horn = false;
+
+  // ヘッドライト点滅（0.35 秒に 2 回）
+  flashT = Math.max(0, flashT - dt);
+  const on = flashT > 0 && Math.floor(flashT / 0.0875) % 2 === 1;
+  lightMat.color.set(on ? 0xffffcc : 0x444444); beam.intensity = on ? 60 : 0;
+  flashEl.style.opacity = on && viewMode === 'fp' ? 0.35 : 0;
+
+  if (policeMesh) {
+    policeMesh.position.x += (LANES[lane] - policeMesh.position.x) * Math.min(1, dt * 3);
+    policeMesh.position.z = state.police.gap + 2.3 + 2.3; // 後方（+z）。gap は車間
+    policeMesh.visible = started;
+  }
+
+  // NPC メッシュ同期
+  const alive = new Set();
+  for (const n of state.npcs) {
+    alive.add(n.id);
+    let m = npcMeshes.get(n.id);
+    if (!m) { m = makeNpcMesh(n.car); m.position.x = LANES[n.lane]; npcMeshes.set(n.id, m); scene.add(m); }
+    m.position.x += (LANES[n.lane] - m.position.x) * Math.min(1, dt * 4);
+    m.position.z = -((n.z - state.player.z) + NPC_Z0 + (n.car.length - 4.2) / 2);
+  }
+  for (const [id, m] of npcMeshes) if (!alive.has(id)) { scene.remove(m); npcMeshes.delete(id); }
+
+  $('score').textContent = 'SCORE ' + state.score;
+  $('combo').textContent = state.combo > 0 ? state.combo + ' COMBO' : '';
+  $('barfill').style.width = state.pressure + '%';
+  const tn = state.npcs.find(n => n.id === state.targetId);
+  $('fearfill').style.width = (tn ? tn.fear : 0) + '%';
+  $('overtakes').textContent = '追い越し ' + state.overtakes + ' 台';
+  $('policefill').style.width = (state.police.active ? 100 : state.policeGauge) + '%';
+  const gv = $('gapval'), dd = state.d;
+  if (Number.isFinite(dd)) {
+    const near = Math.max(0, Math.min(1, 1 - dd / 30)); // 30m 未満で白→赤
+    gv.firstChild.textContent = Math.max(0, Math.round(dd));
+    gv.style.color = 'rgb(255,' + Math.round(255 - 200 * near) + ',' + Math.round(255 - 215 * near) + ')';
+  } else { gv.firstChild.textContent = '---'; gv.style.color = '#fff'; }
+  $('crash').textContent = 'クラッシュ ' + state.crashes + '/3';
+  $('police').textContent = state.police.active ? '🚓 警察が追跡中（' + Math.round(state.police.gap) + 'm）' : (state.policeGauge > 0 ? '警察ゲージ ' + Math.round(state.policeGauge) : '');
+
+  if (!started) { // 選択中：自車をゆっくり回して見せる
+    const t = performance.now() / 1000;
+    car.rotation.y = t * 0.6; camera.position.set(0, 2.6, 7.5); camera.lookAt(0, 0.9, 0);
+    for (const [, m] of npcMeshes) m.visible = false;
+    renderer.render(scene, camera); return;
+  }
+  for (const [, m] of npcMeshes) m.visible = true;
+
+  // 世界を手前（+z）へ流し、範囲を越えたら奥へ戻す
+  for (const o of scrollers) {
+    o.position.z += eff * dt;
+    if (o.position.z > SEG * 2) o.position.z -= LEN;
+  }
+  const dx = LANES[lane] - car.position.x;
+  car.position.x += dx * Math.min(1, dt * 6);
+  steerLean += (dx * -0.08 - steerLean) * Math.min(1, dt * 8);
+  car.rotation.y = steerLean;
+
+  const cx = car.position.x;
+  if (viewMode === 'fp') {
+    // 右ハンドル：運転席は車の右側
+    camera.position.set(cx + 0.45, 1.25, 0.2);
+    camera.lookAt(cx + 0.45 + steerLean * -20, 1.1, -30);
+  } else {
+    camera.position.set(cx * 0.5, 22, 12);
+    camera.lookAt(cx * 0.5, 0, -6);
+  }
+  speedEl.textContent = Math.round(speed * 3.6) + ' km/h';
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
