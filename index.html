@@ -116,40 +116,155 @@ const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(20, 40, 
 // 道路：z 方向に長い帯。無限スクロールは「世界を手前に流す」方式
 const SEG = 20, NSEG = 16, LEN = SEG * NSEG;
 const world = new THREE.Group(); scene.add(world);
+const ROAD_HALF = LANE_W * 1.5 + 0.5; // 5.75
 const asphalt = new THREE.MeshLambertMaterial({ color: 0x3a3a3e, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-const grass = new THREE.Mesh(new THREE.PlaneGeometry(400, 600), new THREE.MeshLambertMaterial({ color: 0x4f7f4a }));
-grass.rotation.x = -Math.PI / 2; grass.position.y = -0.15; scene.add(grass);
-const road = new THREE.Mesh(new THREE.PlaneGeometry(LANE_W * 3 + 1, 600), asphalt);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 600), new THREE.MeshLambertMaterial({ color: 0x7d8087 }));
+ground.rotation.x = -Math.PI / 2; ground.position.y = -0.15; scene.add(ground);
+const road = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HALF * 2, 600), asphalt);
 road.rotation.x = -Math.PI / 2; scene.add(road);
+// 歩道（道路の両側。少し高い）
+const walkMat = new THREE.MeshLambertMaterial({ color: 0xb4b3ad });
+for (const side of [-1, 1]) {
+  const w = new THREE.Mesh(new THREE.BoxGeometry(5.8, 0.2, 600), walkMat);
+  w.position.set(side * (ROAD_HALF + 2.9), 0, 0); scene.add(w);
+  const curb = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.22, 600), new THREE.MeshLambertMaterial({ color: 0xd8d6cf }));
+  curb.position.set(side * (ROAD_HALF + 0.1), 0, 0); scene.add(curb);
+}
 const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 const edgeGeo = new THREE.PlaneGeometry(0.15, 600);
 for (const x of [-LANE_W * 1.5, LANE_W * 1.5]) {
   const e = new THREE.Mesh(edgeGeo, lineMat); e.rotation.x = -Math.PI / 2; e.position.set(x, 0.03, 0); scene.add(e);
 }
-// 流れる物（破線・ガードレール柱・街灯）
-const dashGeo = new THREE.PlaneGeometry(0.15, 3);
-const poleGeo = new THREE.CylinderGeometry(0.1, 0.1, 6, 6);
-const poleMat = new THREE.MeshLambertMaterial({ color: 0x999999 });
+
+// --- 流れる景色：1 区間（SEG m）を 1 つのチャンクにまとめ、小物は頂点カラーで結合して描画数を抑える ---
 const scrollers = [];
-function addScroller(obj, z) { obj.position.z = z; world.add(obj); scrollers.push(obj); }
-for (let i = 0; i < NSEG; i++) {
-  const z = -i * SEG + SEG * 2;
-  for (const x of [-LANE_W / 2, LANE_W / 2]) { // -1.75, 1.75
-    const d = new THREE.Mesh(dashGeo, lineMat); d.rotation.x = -Math.PI / 2; d.position.x = x; d.position.y = 0.03;
-    const g = new THREE.Group(); g.add(d); addScroller(g, z);
+// 乱数（見た目だけ。ゲームロジックには影響しない）。固定シードで毎回同じ街並みにする
+let seed = 20260;
+const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const pick = a => a[Math.floor(rnd() * a.length)];
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _c = new THREE.Color();
+class Merger {
+  constructor() { this.pos = []; this.nor = []; this.col = []; }
+  add(geo, x, y, z, color, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1, parent = null) {
+    let gg = geo.index ? geo.toNonIndexed() : geo.clone();
+    _m.compose(_p.set(x, y, z), _q.setFromEuler(_e.set(rx, ry, rz)), _s.set(sx, sy, sz));
+    if (parent) _m.premultiply(parent);
+    gg.applyMatrix4(_m); _c.set(color);
+    const p = gg.attributes.position.array, n = gg.attributes.normal.array;
+    for (let i = 0; i < p.length; i += 3) { this.pos.push(p[i], p[i + 1], p[i + 2]); this.nor.push(n[i], n[i + 1], n[i + 2]); this.col.push(_c.r, _c.g, _c.b); }
+    gg.dispose();
   }
-  for (const side of [-1, 1]) {
-    const p = new THREE.Mesh(poleGeo, poleMat); p.position.set(side * (LANE_W * 1.5 + 3), 3, 0);
-    const g = new THREE.Group(); g.add(p); addScroller(g, z);
+  box(w, h, l, x, y, z, color, ry = 0, parent = null) { this.add(new THREE.BoxGeometry(w, h, l), x, y, z, color, 0, ry, 0, 1, 1, 1, parent); }
+  mesh(mat) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
+    return new THREE.Mesh(geo, mat);
   }
 }
-// 遠くの建物（装飾）
-const bMat = new THREE.MeshLambertMaterial({ color: 0x8c93a0 });
-for (let i = 0; i < NSEG; i++) for (const side of [-1, 1]) {
-  const h = 6 + Math.random() * 20;
-  const b = new THREE.Mesh(new THREE.BoxGeometry(8, h, 8), bMat);
-  b.position.set(side * (20 + Math.random() * 15), h / 2, 0);
-  const g = new THREE.Group(); g.add(b); addScroller(g, -i * SEG + SEG * 2);
+const propMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+const markMat = new THREE.MeshBasicMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+
+// 建物の外壁テクスチャ：窓の明かりをランダムに点灯（4 階 × 4 列 = 12.8m 四方のタイル）
+const TILE = 12.8;
+function windowTexture(wall) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const c = cv.getContext('2d');
+  c.fillStyle = wall; c.fillRect(0, 0, 128, 128);
+  for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) {
+    const x = k * 32 + 6, y = r * 32 + 7, lit = rnd() < 0.38;
+    c.fillStyle = lit ? (rnd() < 0.5 ? '#ffe08a' : '#fff1c4') : (rnd() < 0.5 ? '#35465c' : '#4b5d74');
+    c.fillRect(x, y, 20, 17);
+    c.fillStyle = 'rgba(0,0,0,.25)'; c.fillRect(x, y + 17, 20, 2);          // 窓枠の影
+    c.fillStyle = 'rgba(255,255,255,.2)'; c.fillRect(k * 32, r * 32 + 30, 32, 2); // 階の区切り
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+const bldMats = ['#c9bfae', '#b7bcc4', '#a98f7e', '#9fb2c4', '#c8a8a0', '#8e9a8b'].map(w =>
+  new THREE.MeshLambertMaterial({ map: windowTexture(w) }));
+const roofMat = new THREE.MeshLambertMaterial({ color: 0x6a6d72 });
+function makeBuilding(side) {
+  const w = pick([9.6, 12.8]), d = pick([12.8, 16]), h = 3.2 * (3 + Math.floor(rnd() * 8));
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const uv = geo.attributes.uv; // 面ごとに UV を寸法に合わせて拡大（窓の大きさを一定にする）
+  for (let f = 0; f < 6; f++) {
+    if (f === 2 || f === 3) continue;
+    const fw = f < 2 ? d : w;
+    for (let i = f * 4; i < f * 4 + 4; i++) uv.setXY(i, uv.getX(i) * fw / TILE, uv.getY(i) * h / TILE);
+  }
+  const sm = pick(bldMats);
+  const m = new THREE.Mesh(geo, [sm, sm, roofMat, roofMat, sm, sm]);
+  m.position.set(side * (ROAD_HALF + 6.5 + rnd() * 3 + w / 2), h / 2 - 0.1, (rnd() - 0.5) * (SEG - d));
+  return m;
+}
+// 矢印（路面標示）
+const arrowShape = new THREE.Shape();
+[[0, 2.2], [0.85, 0.9], [0.3, 0.9], [0.3, -1.6], [-0.3, -1.6], [-0.3, 0.9], [-0.85, 0.9]].forEach(([x, y], i) => i ? arrowShape.lineTo(x, y) : arrowShape.moveTo(x, y));
+const arrowGeo = new THREE.ShapeGeometry(arrowShape);
+const stripeGeo = new THREE.PlaneGeometry(0.15, 3), zebraGeo = new THREE.PlaneGeometry(0.55, 4);
+const cylGeo = new THREE.CylinderGeometry(1, 1, 1, 14), treeGeo = new THREE.IcosahedronGeometry(1, 0);
+const SIGN_COLS = [0x1f5fb0, 0x1c8a52, 0xd84a2a, 0xe0b020];
+
+function makeChunk(i) {
+  const chunk = new THREE.Group();
+  const P = new Merger(), M = new Merger();
+  // 車線の破線（隣り合う車線の境界）と、たまに横断歩道・路面の矢印
+  for (const x of [-LANE_W / 2, LANE_W / 2]) M.add(stripeGeo, x, 0.03, 0, 0xffffff, -Math.PI / 2);
+  if (i % 7 === 3) for (let k = -5; k <= 5; k++) M.add(zebraGeo, k * 1.0, 0.032, -9, 0xf2f2f2, -Math.PI / 2);
+  else if (i % 5 === 1) for (const ln of (i % 2 ? [-LANE_W, 0, LANE_W] : [LANE_W])) M.add(arrowGeo, ln, 0.032, -6, 0xe8e8e8, -Math.PI / 2);
+  for (const side of [-1, 1]) {
+    // ガードレール（歩道の車道側）：レール 2 本＋支柱 6 本
+    const gx = side * (ROAD_HALF + 0.7);
+    for (const zc of [-5, 5]) P.box(0.08, 0.28, 9.2, gx, 0.72, zc, 0xc9ced6);
+    for (const zp of [-9, -5, -1, 1, 5, 9]) P.box(0.1, 0.8, 0.1, gx, 0.4, zp, 0x555a60);
+    // 街灯（道路側へ腕が伸びる）。左右で半区間ずらす
+    const lz = side * 5, lx = side * (ROAD_HALF + 1.5);
+    P.add(cylGeo, lx, 3.5, lz, 0x8d9299, 0, 0, 0, 0.09, 7, 0.09); // 支柱
+    P.box(2.6, 0.1, 0.1, lx - side * 1.3, 7, lz, 0x8d9299);
+    P.box(0.9, 0.14, 0.42, lx - side * 2.5, 6.92, lz, 0xfff0b8);
+    // 街路樹
+    if (rnd() < 0.7) {
+      const tx = side * (ROAD_HALF + 4.3 + rnd() * 0.8), tz = (rnd() - 0.5) * 14, r = 1.1 + rnd() * 0.5;
+      P.box(0.2, 1.8, 0.2, tx, 0.9, tz, 0x6b4a2b);
+      P.add(treeGeo, tx, 2.2 + r * 0.6, tz, pick([0x3f7f3f, 0x4f8f45, 0x2f6f3a, 0x7a9a3a]), 0, rnd() * 3, 0, r, r * 1.15, r);
+    }
+  }
+  // 標識（青い案内板・速度制限の丸標識）：3 区間に 1 回、左右交互
+  if (i % 3 === 0) {
+    const side = i % 6 === 0 ? 1 : -1, sx = side * (ROAD_HALF + 3.3), sz = 2;
+    P.box(0.1, 2.8, 0.1, sx, 1.4, sz, 0x8d9299);
+    if (i % 2 === 0) {
+      P.add(cylGeo, sx, 3.1, sz, 0xd02020, Math.PI / 2, 0, 0, 0.5, 0.06, 0.5);
+      P.add(cylGeo, sx, 3.1, sz + 0.04, 0xffffff, Math.PI / 2, 0, 0, 0.38, 0.06, 0.38);
+      P.box(0.34, 0.1, 0.02, sx, 3.1, sz + 0.07, 0x222222);
+    } else {
+      P.box(1.7, 0.9, 0.08, sx, 3.0, sz, pick(SIGN_COLS));
+      P.box(1.3, 0.08, 0.02, sx, 3.15, sz + 0.05, 0xffffff); P.box(0.9, 0.08, 0.02, sx, 2.88, sz + 0.05, 0xffffff);
+    }
+  }
+  // 看板（ビルの手前に立つ大きな広告）：4 区間に 1 回
+  if (i % 4 === 2) {
+    const side = i % 8 === 2 ? -1 : 1, bx = side * (ROAD_HALF + 5.2), bz = 4;
+    const par = new THREE.Matrix4().compose(new THREE.Vector3(bx, 0, bz), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, side * 0.5, 0)), new THREE.Vector3(1, 1, 1));
+    const col = pick(SIGN_COLS), tow = -side * 0.14;
+    for (const zz of [-2.2, 2.2]) P.box(0.2, 4.4, 0.2, 0, 2.2, zz, 0x70757c, 0, par);
+    P.box(0.2, 2.6, 6.2, 0, 5.2, 0, 0x30343a, 0, par);
+    P.box(0.1, 2.3, 5.9, tow, 5.2, 0, col, 0, par);
+    P.box(0.05, 0.5, 4.6, tow * 1.6, 5.6, 0, 0xffffff, 0, par);
+    P.box(0.05, 0.9, 1.4, tow * 1.6, 4.9, -1.6, 0xffe27a, 0, par);
+    P.box(0.05, 0.25, 2.6, tow * 1.6, 4.9, 1.2, 0xf2f2f2, 0, par);
+  }
+  chunk.add(P.mesh(propMat), M.mesh(markMat));
+  chunk.add(makeBuilding(-1), makeBuilding(1));
+  return chunk;
+}
+for (let i = 0; i < NSEG; i++) {
+  const c = makeChunk(i); c.position.z = -i * SEG + SEG * 2;
+  world.add(c); scrollers.push(c);
 }
 
 // 自車：原点に固定、進行方向は -z。車種・色は選択画面で決める
@@ -325,9 +440,14 @@ renderer.setAnimationLoop(() => {
   // ヘッドライト点滅（0.35 秒に 2 回）
   flashT = Math.max(0, flashT - dt);
   const on = flashT > 0 && Math.floor(flashT / 0.0875) % 2 === 1;
-  lightMat.color.set(on ? 0xffffcc : 0x444444); beam.intensity = on ? 60 : 0;
+  lightMat.color.set(on ? 0xffffff : 0xe6e2c4); beam.intensity = on ? 60 : 0;
   flashEl.style.opacity = on && viewMode === 'fp' ? 0.35 : 0;
 
+  { // パトカーの回転灯（赤・青を交互に点滅）
+    const ph = Math.floor(performance.now() / 180) % 2;
+    const sirens = [policeMesh, ...npcMeshes.values()];
+    for (const m of sirens) { const sr = m && m.userData.siren; if (sr) { sr.red.color.set(ph ? 0xff2020 : 0x501010); sr.blue.color.set(ph ? 0x102050 : 0x2a70ff); } }
+  }
   if (policeMesh) {
     policeMesh.position.x += (LANES[lane] - policeMesh.position.x) * Math.min(1, dt * 3);
     policeMesh.position.z = state.police.gap + 2.3 + 2.3; // 後方（+z）。gap は車間
